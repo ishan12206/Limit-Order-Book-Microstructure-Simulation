@@ -182,30 +182,11 @@ class LimitOrderBookSimulator:
             history.append(state)
         return history
     
-def print_state(step, state):
-    print(
-        f"Step {step + 1:4d} | "
-        f"Event: {state['event']} | "
-        f"Bid: {state['best_bid']:>5} ({state['bid_depth']:>2}) | "
-        f"Ask: {state['best_ask']:>5} | "
-        f"Mid: {state['mid_price']:>6.2f} | "
-        f"Spr: {state['spread']:>2} | "
-        f"Imb: {state['imbalance']:>6.3f}"
-    )
 
-    
-if __name__ == "__main__":
-    lob = LimitOrderBookSimulator()
-    history = lob.simulate(steps=50)
-    for i, snapshot in enumerate(history):
-        print_state(i, snapshot)
-    
-
-
-            
     
 
     
+
 
 
 
