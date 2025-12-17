@@ -98,7 +98,7 @@ This reveals a **critical liquidity regime** where markets are most fragile.
 Measure how quickly the market recovers after a liquidity shock.
 
 **Definitions**
-- **Shock:** spread > 10  
+- **Shock:** spread > 15 
 - **Recovery:** spread ≤ 5  
 - **Recovery time:** number of steps between shock and recovery  
 
