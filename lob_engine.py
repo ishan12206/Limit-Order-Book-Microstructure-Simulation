@@ -15,7 +15,7 @@ CANCEL_NONE = "cancel_none"
 
 
 class LimitOrderBookSimulator:
-    def __init__(self,initial_price=100,tick_size=1,lambda_market = 4.0,lambda_limit = 7.0,lambda_cancel = 3.0,order_size = 1):
+    def __init__(self,initial_price=100,tick_size=1,lambda_market = 4.0,lambda_limit = 1.0,lambda_cancel = 3.0,order_size = 1):
         self.initial_price = initial_price
         self.tick_size = tick_size
         self.lambda_market = lambda_market
@@ -34,9 +34,15 @@ class LimitOrderBookSimulator:
             self.asks[price + i * self.tick_size] = volume
 
     def best_bid(self):
-        return max(self.bids.keys()) if self.bids else None
+        if not self.bids:
+            return None
+        return max(p for p in self.bids if p is not None)
+
     def best_ask(self):
-        return min(self.asks.keys()) if self.asks else None
+        if not self.asks:
+            return None
+        return min(p for p in self.asks if p is not None)
+
     
 
     def mid_price(self):
@@ -54,16 +60,33 @@ class LimitOrderBookSimulator:
         return None
     
     def bid_depth(self):
+        if self.best_bid() is None:
+            return 0
         return self.bids[self.best_bid()]
 
     def relative_bid_depth(self):
-        bd = self.bids[self.best_bid()]
-        ad = self.asks[self.best_ask()]
+        bid = self.best_bid()
+        ask = self.best_ask()
+        if bid is None or ask is None:
+            return None
+        bd = self.bids[bid]
+        ad = self.asks[ask]
+        if bd + ad == 0:
+            return None
         return bd / (bd + ad)
 
     def imbalance(self):
-        bd = self.bids[self.best_bid()]
-        ad = self.asks[self.best_ask()]
+        bid = self.best_bid()
+        ask = self.best_ask()
+        if bid is None or ask is None:
+            return 0.0
+        
+        bd = self.bids[bid]
+        ad = self.asks[ask]
+
+        if bd+ad == 0:
+            return 0.0
+        
         return (bd - ad) / (bd + ad)
 
     def market_buy(self,size=None):
@@ -89,53 +112,71 @@ class LimitOrderBookSimulator:
                 del self.bids[best_bid]
 
     def limit_buy(self):
-        k = np.random.randint(1, 6)   # placement depth
         ref = self.best_bid() if self.best_bid() is not None else self.initial_price
-        price = ref - k * self.tick_size
+        spread = self.spread() if self.spread() is not None else 0
+        p_inside = min(0.95, 0.3 + 0.1 * spread)
+        if np.random.rand() < p_inside:  # 30%-95% at best bid
+            price = ref
+        else:
+            k = np.random.randint(1, 6)
+            price = ref - k * self.tick_size
+
         self.bids[price] += self.order_size
-    
+
+
     def limit_sell(self):
-        k = np.random.randint(1, 6)   # placement depth
         ref = self.best_ask() if self.best_ask() is not None else self.initial_price
-        price = ref + k * self.tick_size
+        spread = self.spread() if self.spread() is not None else 0
+        p_inside = min(0.95, 0.3 + 0.1 * spread)
+        if np.random.rand() < p_inside:  # 30%-95% at best ask
+            price = ref
+        else:
+            k = np.random.randint(1, 6)
+            price = ref + k * self.tick_size
+
         self.asks[price] += self.order_size
+
 
     def cancel_order(self):
         imb = self.imbalance()
-        p = 0.5 + 0.5 * abs(imb)
+        panic_prob = 0.5 + 0.5 * abs(imb)
 
         # Panic-biased cancellation
-        if imb < 0 and self.bids and np.random.rand() < p:
-            price = self.best_bid()
-            self.bids[price] -= 1
-            if self.bids[price] == 0:
-                del self.bids[price]
-            return CANCEL_BID
-
-        elif imb > 0 and self.asks and np.random.rand() < p:
+        if imb > 0 and self.asks and np.random.rand() < panic_prob:
             price = self.best_ask()
-            self.asks[price] -= 1
-            if self.asks[price] == 0:
-                del self.asks[price]
-            return CANCEL_ASK
+            if price is not None:
+                self.asks[price] -= 1
+                if self.asks[price] <= 0:
+                    del self.asks[price]
+                return CANCEL_ASK
+
+        if imb < 0 and self.bids and np.random.rand() < panic_prob:
+            price = self.best_bid()
+            if price is not None:
+                self.bids[price] -= 1
+                if self.bids[price] <= 0:
+                    del self.bids[price]
+                return CANCEL_BID
 
         # Neutral fallback
-        elif self.bids and (not self.asks or np.random.rand() < 0.5):
+        if self.bids and (not self.asks or np.random.rand() < 0.5):
             price = self.best_bid()
-            self.bids[price] -= 1
-            if self.bids[price] == 0:
-                del self.bids[price]
-            return CANCEL_BID
+            if price is not None:
+                self.bids[price] -= 1
+                if self.bids[price] <= 0:
+                    del self.bids[price]
+                return CANCEL_BID
 
-        elif self.asks:
+        if self.asks:
             price = self.best_ask()
-            self.asks[price] -= 1
-            if self.asks[price] == 0:
-                del self.asks[price]
-            return CANCEL_ASK
+            if price is not None:
+                self.asks[price] -= 1
+                if self.asks[price] <= 0:
+                    del self.asks[price]
+                return CANCEL_ASK
 
-        # Cancellation event occurred, but nothing to cancel
         return CANCEL_NONE
+
 
 
     def step(self):
@@ -183,10 +224,12 @@ class LimitOrderBookSimulator:
         return history
     
 
+
+
+            
     
 
     
-
 
 
 
